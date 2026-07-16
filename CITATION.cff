@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "Se você usar este código, dados ou modelo, por favor cite conforme abaixo."
+title: "Classificação de sub-técnicas de judô em vídeo (MC3 two-stream, validação cruzada por fonte)"
+abstract: >-
+  Reconhecimento de ação em vídeo para classificar golpes de judô
+  (sutemi_waza vs tachi_waza). Modelo temporal MC3-18 com entrada two-stream
+  (RGB + fluxo óptico), avaliado com validação cruzada StratifiedGroupKFold
+  por fonte (sem vazamento). Macro F1 = 0,68 ± 0,03 (7 folds).
+type: software
+authors:
+  - given-names: "Everton Kauan S."
+    family-names: Oliveira
+    email: everton.kauan.silva.oliveira@ccc.ufcg.edu.br
+    affiliation: "Federal University of Campina Grande"
+  - given-names: "Everton Leandro G."
+    family-names: Alves
+    email: everton@computacao.ufcg.edu.br
+    affiliation: "Federal University of Campina Grande"
+version: "1.0.0"
+date-released: "2026-07-15"
+license: MIT
+keywords:
+  - judo
+  - action recognition
+  - video classification
+  - MC3
+  - two-stream
+  - optical flow
+  - cross-validation

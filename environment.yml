@@ -1,0 +1,31 @@
+# Ambiente conda (alternativa ao requirements.txt).
+# Criar:   conda env create -f environment.yml
+# Ativar:  conda activate judo-mc3
+#
+# Para GPU, instale o pytorch-cuda conforme a sua CUDA (veja comentario abaixo).
+name: judo-mc3
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  # --- PyTorch (GPU CUDA 12.1). Para CPU, remova 'pytorch-cuda' e use cpuonly ---
+  - pytorch=2.2.2
+  - torchvision=0.17.2
+  - pytorch-cuda=12.1
+  # --- restante via conda-forge ---
+  - numpy=1.26.4
+  - pandas=2.2.2
+  - scikit-learn=1.4.2
+  - matplotlib=3.8.4
+  - pillow=10.3.0
+  - scipy=1.13.0
+  - tqdm=4.66.4
+  - av=12.0.0
+  - pip:
+      - opencv-python==4.9.0.80
+      - decord==0.6.0
+      - ultralytics==8.2.0
+      - yt-dlp        # apenas para baixar os videos-fonte (passo de dados)

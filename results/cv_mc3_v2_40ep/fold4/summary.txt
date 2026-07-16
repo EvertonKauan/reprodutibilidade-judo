@@ -1,0 +1,23 @@
+============================================================
+JUDO CLASSIFICATION SUMMARY
+============================================================
+Data dir:  data/analysis_data/clips
+Output:    res_v2_fusion_mc3v2_fold4
+Model:     mc3_18
+Mode:      multiclass
+Spatial:   full_frame
+
+Dataset distribution:
+  sutemi_waza: total=527 train=377 val=75 test=75
+  tachi_waza: total=859 train=615 val=122 test=122
+
+Test Accuracy:  0.7107
+Test Macro F1:  0.6789
+Best Val F1:    0.638235425481837
+
+F1 per class:
+  sutemi_waza: 0.5778
+  tachi_waza: 0.7799
+
+Best model: res_v2_fusion_mc3v2_fold4/multiclass/best_model.pt
+============================================================

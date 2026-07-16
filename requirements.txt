@@ -1,0 +1,33 @@
+# =====================================================================
+#  Dependencias — Classificacao de sub-tecnicas de judo (MC3, two-stream)
+# =====================================================================
+#
+#  PyTorch: as versoes abaixo assumem GPU CUDA 12.1. Se o torch nao enxergar
+#  a GPU, reinstale seguindo o comando oficial para a sua CUDA:
+#      https://pytorch.org/get-started/locally/
+#  Ex. (CUDA 12.1):
+#      pip install torch==2.2.2 torchvision==0.17.2 \
+#          --index-url https://download.pytorch.org/whl/cu121
+#
+#  Estas versoes formam um conjunto testado-compativel.
+# =====================================================================
+
+torch==2.2.2
+torchvision==0.17.2
+
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.4.2      # StratifiedGroupKFold (split por fonte)
+opencv-python==4.9.0.80
+matplotlib==3.8.4
+Pillow==10.3.0
+scipy==1.13.0
+tqdm==4.66.4
+
+# leitura de video (main.py usa decord se disponivel, senao cai para OpenCV)
+av==12.0.0
+decord==0.6.0
+
+# YOLO auxiliar (opcional; so usado com --spatial_mode yolo_union_crop).
+# O run principal (MC3 v2) usa --spatial_mode full_frame e NAO precisa disto.
+ultralytics==8.2.0

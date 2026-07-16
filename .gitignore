@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.DS_Store
+
+# Dados grandes (vêm do Zenodo, não do repositório)
+data/input_data/videos_fonte/
+data/analysis_data/clips/
+*.mp4
+*.avi
+*.mkv
+*.mov
+.flow_cache/
