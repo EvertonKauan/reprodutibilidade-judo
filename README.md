@@ -7,20 +7,21 @@ sem vazamento de contexto).
 
 ## Resultado principal
 
-| | Macro F1 (validação cruzada, 7 folds) |
-|---|---|
-| **MC3-18 two-stream — binário sutemi vs tachi** | **0,68 ± 0,03** (min 0,64 / máx 0,71) |
+| Modelo (two-stream, 7-fold CV por fonte) | Macro F1          |
+| ---------------------------------------- | ----------------- |
+| **MC3-18 — binário sutemi vs tachi**     | **0,698 ± 0,029** |
+| R(2+1)D-18 (mesmo split/dataset)         | 0,590 ± 0,054     |
 
 O número reportado é a **média da validação cruzada**, não o melhor fold (evita
 cherry-picking). Detalhamento por fold em [`results/cv_summary.md`](results/cv_summary.md)
 (gerado por `scripts/04_resumo_cv.py`).
 
-> **Subconjunto público.** O experimento reportado usou o **conjunto completo** (~1012
-> clipes de várias fontes, descrito no artigo), em parte **privado**. Este repositório
-> disponibiliza apenas um **subconjunto público** — **594 clipes** de **22 vídeos-fonte**
-> do YouTube — para demonstrar e verificar o pipeline. Treinar somente com esse subconjunto
-> **não reproduz** o `0,68 ± 0,03`; os relatórios do experimento completo estão em
-> `results/cv_mc3_v2_40ep/` como referência.
+> **Amostra pública (não reproduz 100%).** O experimento reportado usou o **conjunto
+> completo** (1392 clipes: 527 sutemi + 859 tachi, descrito no artigo), em parte **privado**.
+> **Nem todos os vídeos são públicos.** Este repositório disponibiliza apenas uma **amostra
+> pública** — **594 clipes** de **13 vídeos-fonte** do YouTube — para demonstrar e verificar
+> o pipeline. Treinar somente com essa amostra **não reproduz** o `0,698 ± 0,029`; os
+> relatórios completos estão em `results/cv_mc3_v2_40ep/` como referência.
 
 > **Por que validação cruzada por fonte?** Muitos clipes vêm da mesma luta/fonte
 > (near-duplicates). Num split por vídeo, clipes da mesma luta caem em treino **e** teste,
@@ -36,12 +37,13 @@ judo-subtecnicas-mc3/
 │   └── main.py                     # Código de treino/avaliação (modelos temporais)
 ├── data/
 │   ├── input_data/                 # Originais e intocáveis
-│   │   ├── fontes_videos.csv        #   22 vídeos-fonte públicos (YouTube)
+│   │   ├── fontes_videos.csv        #   MANIFESTO: 1 linha por clipe (id, url, momento_corte, classe, arquivo)
 │   │   └── videos_fonte/            #   vídeos completos (baixados via URL)
 │   └── analysis_data/
-│       └── clips/                   #   clipes de ~4s rotulados (sob solicitação / extrator)
+│       └── clips/                   #   clipes de ~4s (regeneráveis do manifesto via script 05)
 ├── scripts/
 │   ├── 01_baixar_videos.py          # baixa os vídeos-fonte (yt-dlp)
+│   ├── 05_gerar_clipes.py           # recorta os 594 clipes do manifesto (ffmpeg)
 │   ├── 02_treinar_cv_mc3.sh/.ps1    # treino com validação cruzada (7 folds)
 │   ├── 03_... calibracao_mc3_v2.py  # calibração de limiar (opcional)
 │   └── 04_resumo_cv.py              # média ± desvio da CV (número do artigo)
@@ -50,6 +52,7 @@ judo-subtecnicas-mc3/
 │   ├── cv_mc3_v2_40ep/foldN/        # métricas por fold (report, matriz, curvas)
 │   ├── calibracao/                  # saídas da calibração
 │   └── cv_summary.md                # tabela-resumo da CV
+├── dist/                            # extrator de quedas standalone (Linux) — ver dist/README.md
 ├── docs/                            # metodologia e notas de laboratório
 ├── requirements.txt / environment.yml
 ├── LICENSE  ·  CITATION.cff  ·  README.md
@@ -71,36 +74,35 @@ conda activate judo-mc3
 
 ## 2) Dados
 
-Este repositório compartilha um **subconjunto público** do dataset do estudo (o conjunto completo, maior e em parte privado, é descrito no artigo). Os **vídeos-fonte não são redistribuídos** (direitos autorais). O
-arquivo [`data/input_data/fontes_videos.csv`](data/input_data/fontes_videos.csv) traz as
-**URLs** dos **22 vídeos-fonte** (públicos, YouTube), de onde os **594 clipes** rotulados
-foram recortados:
+Este repositório compartilha um **subconjunto público** do dataset do estudo (o conjunto
+completo, maior e em parte privado, é descrito no artigo). Os **vídeos-fonte não são
+redistribuídos** (direitos autorais dos canais), mas os **594 clipes são totalmente
+regeneráveis** a partir do manifesto — **sem precisar entrar em contato com os autores**.
 
-| Classe (binária) | Composição | Clipes |
-|---|---|---|
-| Sutemi Waza | sutemi_waza | 175 |
-| Tachi Waza | ashi_waza (245) + te_waza (174) | 419 |
-| **Total** | — | **594** |
+O manifesto [`data/input_data/fontes_videos.csv`](data/input_data/fontes_videos.csv) tem
+**uma linha por clipe**, com o vídeo-fonte (`id`, `url`), o **intervalo de corte**
+(`momento_corte`), a `classe` e o nome do `arquivo`. Os 594 clipes vêm de **13 vídeos-fonte
+públicos** do YouTube.
 
-A lista completa das **22 fontes** está em
-[`data/input_data/fontes_videos.csv`](data/input_data/fontes_videos.csv).
+| Classe (binária) | Composição                      | Clipes  |
+| ---------------- | ------------------------------- | ------- |
+| Sutemi Waza      | sutemi_waza                     | 175     |
+| Tachi Waza       | ashi_waza (245) + te_waza (174) | 419     |
+| **Total**        | —                               | **594** |
 
-Os **clipes** rotulados (dataset de treino) vão em `data/analysis_data/clips/`. Por
-restrições de direitos autorais, **não** são publicados neste repositório e podem ser
-**solicitados aos autores**. Cada clipe é rastreável à sua fonte pelo nome:
-`<classe>_<idFonte>_luta<NN>_sub<NN>.mp4` — ex.: `te_waza_JTTP_kAAX7k_luta03_sub03.mp4` veio
-de `JTTP_kAAX7k`.
+**Para reconstruir o dataset** (não precisa de contato):
 
-Para (re)obter os dados:
 ```bash
-# (a) baixar os 22 vídeos-fonte direto do YouTube (720p)
+# (a) baixar os 13 vídeos-fonte a partir das URLs do manifesto (720p)
 python scripts/01_baixar_videos.py
 
-# (b) gerar os clipes a partir dos vídeos-fonte com o extrator de highlights (~4 s por golpe)
+# (b) recortar os 594 clipes nos intervalos exatos do manifesto (requer ffmpeg)
+python scripts/05_gerar_clipes.py
 ```
 
-A classe está no nome do arquivo; o split por fonte é gerado no treino (`--group_split`).
-Detalhes em [`data/README.md`](data/README.md).
+Os clipes ficam em `data/analysis_data/clips/`, prontos para o treino. A classe está no
+nome do arquivo; o split por fonte é gerado no treino (`--group_split`). Detalhes em
+[`data/README.md`](data/README.md).
 
 ## 3) Treino (validação cruzada, 7 folds)
 
@@ -122,6 +124,21 @@ Cada fold reproduz exatamente os hiperparâmetros de
 python scripts/04_resumo_cv.py      # imprime e salva results/cv_summary.md
 ```
 
+## Extrator de quedas (`dist/`)
+
+A pasta [`dist/`](dist/) traz um **executável standalone** (`detector_quedas`) que detecta
+as quedas em vídeos completos por pose (YOLO). É uma ferramenta **opcional** de apoio à
+extração de clipes: você pode usá-la **ou** recortar manualmente. Detalhes em
+[`dist/README.md`](dist/README.md).
+
+- **Sobredetecta:** por ser baseado em pose, marca quedas a mais do que o necessário (ex.:
+  atletas em pé, mas curvados). Os trechos incorretos precisam ser **revisados e descartados
+  manualmente**.
+- **Não embute** `torch`/`ultralytics` no binário; delega ao Python do sistema (você instala
+  `ultralytics` com `pip`). O modelo de pose oficial da Ultralytics é baixado por ela e
+  **não** é redistribuído aqui — só o código próprio do projeto acompanha o pacote.
+- Compilado e **testado em Linux** (ELF); não verificado em Windows/macOS.
+
 ## Modelo treinado
 
 `results/models/mc3_18_fusion_fold5_best_macroF1_0.720.pt` — pesos do **melhor fold**
@@ -136,8 +153,3 @@ python scripts/04_resumo_cv.py      # imprime e salva results/cv_summary.md
 ## Citação
 
 Veja [`CITATION.cff`](CITATION.cff).
-
-## Licença
-
-Código sob [MIT](LICENSE). Os vídeos-fonte pertencem aos canais originais do YouTube e são
-usados apenas para pesquisa acadêmica (ver nota no `LICENSE`).

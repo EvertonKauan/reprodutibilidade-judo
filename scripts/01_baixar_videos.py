@@ -35,8 +35,13 @@ def main() -> int:
     args = ap.parse_args()
 
     os.makedirs(args.dest, exist_ok=True)
+    # O manifesto tem 1 linha por clipe (URLs repetidas); baixa cada fonte 1x.
     with open(args.csv, newline="", encoding="utf-8") as f:
-        urls = [row["url"] for row in csv.DictReader(f) if row.get("url")]
+        seen, urls = set(), []
+        for row in csv.DictReader(f):
+            u = (row.get("url") or "").strip()
+            if u and u not in seen:
+                seen.add(u); urls.append(u)
     print(f"{len(urls)} video(s) a baixar em {args.quality}p -> {args.dest}")
 
     fmt = f"bv*[height<={args.quality}]+ba/b[height<={args.quality}]/b"

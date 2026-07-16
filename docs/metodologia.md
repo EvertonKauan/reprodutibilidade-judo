@@ -8,10 +8,10 @@ Classificação binária **sutemi_waza vs tachi_waza** (onde `tachi_waza` = `ash
 
 ## Dados
 - Clipes de ~4 s, um por golpe, com a classe no nome do arquivo.
-- O **estudo** usou o conjunto completo (~1012 clipes, várias fontes, parte privada — ver artigo). Este material público traz um **subconjunto de 594 clipes** de 22 fontes públicas do YouTube (Sutemi 175 / Tachi 419).
+- O **estudo** usou o conjunto completo (~1012 clipes, várias fontes, parte privada — ver artigo). Este material público traz um **subconjunto de 594 clipes** de 13 fontes públicas do YouTube (Sutemi 175 / Tachi 419).
 - O `source_id` (vídeo-fonte de origem) é derivado do nome
   (`<classe>_<idFonte>_luta<NN>_sub<NN>`), permitindo o split por fonte.
-- Vídeos-fonte referenciados por URL (`fontes_videos.csv`); clipes derivados sob solicitação.
+- Vídeos-fonte referenciados por URL no manifesto (`fontes_videos.csv`, com `momento_corte`); clipes **regeneráveis** via `scripts/05_gerar_clipes.py`.
 
 ## Modelos
 - **R(2+1)D-18** e **MC3-18** (arquiteturas de reconhecimento de ação em vídeo,

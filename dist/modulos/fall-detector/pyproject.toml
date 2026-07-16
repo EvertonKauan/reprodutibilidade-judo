@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fall-detector"
+version = "0.1.0"
+description = "FallDetector: valida se uma queda ocorreu nos frames analisados"
+requires-python = ">=3.9"
+dependencies = ["numpy"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

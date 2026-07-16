@@ -1,11 +1,11 @@
 # Dados
 
-Este repositório traz um **subconjunto público** (594 clipes de 22 vídeos-fonte) do dataset do estudo — o conjunto completo é maior e em parte privado (ver artigo). Organiza-se assim:
+Este repositório traz um **subconjunto público** (594 clipes de 13 vídeos-fonte) do dataset do estudo — o conjunto completo é maior e em parte privado (ver artigo). Organiza-se assim:
 
-1. **22 vídeos-fonte completos** (públicos, do YouTube) — a matéria-prima, recortada pelo
+1. **13 vídeos-fonte completos** (públicos, do YouTube) — a matéria-prima, recortada pelo
    **extrator de highlights** para gerar os clipes.
 2. **594 clipes já cortados e rotulados** — prontos para treinar o modelo; cada um rastreável
-   a uma das 22 fontes pelo nome do arquivo.
+   a uma das 13 fontes pelo nome do arquivo.
 
 Segue o padrão de compêndio reproduzível:
 

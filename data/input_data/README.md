@@ -1,29 +1,35 @@
 # input_data — dados originais e intocáveis
 
-## `fontes_videos.csv`
-Os **22 vídeos-fonte** (públicos, YouTube) a partir dos quais os **594 clipes** do subconjunto público
-foram recortados. Colunas: `id`, `canal`, `url`, `arquivo`, `clipes_derivados`.
+## `fontes_videos.csv` (o manifesto)
+Manifesto do subconjunto público: **uma linha por clipe** (594 no total), permitindo
+regenerar todo o dataset a partir dos vídeos públicos. Colunas:
 
-| Vídeo-fonte (`arquivo`) | Canal | Clipes derivados |
-|---|---|---|
-| Sutemi Waza | `sutemi_waza` | 175 |
-| Tachi Waza | `ashi_waza` + `te_waza` | 419 |
-| **Total** | | **594** |
+| Coluna | Descrição |
+|---|---|
+| `id` | ID do vídeo-fonte no YouTube |
+| `canal` | Canal de origem (CBJ TV, Ochiru, etc.) |
+| `url` | URL do vídeo-fonte |
+| `momento_corte` | Intervalo do clipe no vídeo-fonte (`H:MM:SS.ss -> H:MM:SS.ss`) |
+| `classe` | `sutemi_waza`, `ashi_waza` ou `te_waza` |
+| `arquivo` | Nome do clipe gerado |
 
-## `videos_fonte/` (os 22 vídeos completos)
-São a **matéria-prima**: cada um dá origem a vários clipes. Obtenha de uma destas formas:
-1. **URLs** — as URLs dos 22 vídeos estão em `fontes_videos.csv`.
-2. **Download** — baixe direto do YouTube:
-   ```bash
-   python scripts/01_baixar_videos.py        # 720p (padrao)
-   ```
-   Salvos como `videos_fonte/<id>.mp4`.
+Os 594 clipes vêm de **13 vídeos-fonte públicos** distintos (dos canais CBJ TV, Ochiru,
+Judo Highlights e Judo Spirit). Composição binária: **Sutemi 175 / Tachi 419**
+(ashi 245 + te 174).
 
-Do vídeo completo, o **extrator de highlights** recorta os trechos de ~4 s (um por golpe),
-que viram os clipes rotulados em `../analysis_data/clips/`.
+## `videos_fonte/` (os vídeos completos)
+A **matéria-prima**. Não são redistribuídos (direitos autorais); baixe a partir das URLs
+do manifesto:
+```bash
+python scripts/01_baixar_videos.py        # 720p (baixa cada fonte 1x)
+```
+Salvos como `videos_fonte/<id>.mp4`.
 
-> **Rastreabilidade fonte → clipe:** o nome de cada clipe embute o `id` da fonte
-> (`<classe>_<idFonte>_luta<NN>_sub<NN>.mp4`). Assim, todo clipe é ligado ao seu vídeo-fonte
-> — e é isso que permite o split **por fonte** no treino (nenhuma fonte cruza train/teste).
+## Como os clipes são regenerados
+Com os vídeos-fonte baixados, `scripts/05_gerar_clipes.py` recorta cada clipe no intervalo
+exato do `momento_corte`, gravando em `../analysis_data/clips/`. Assim o dataset é
+reconstruído **sem contato com os autores**.
 
-> **Direitos:** os vídeos pertencem aos canais originais do YouTube (uso acadêmico/pesquisa).
+> **Rastreabilidade:** o nome do clipe embute o `id` da fonte
+> (`<classe>_<idFonte>_luta<NN>_sub<NN>.mp4`), o que também sustenta o split **por fonte**
+> no treino (nenhuma fonte cruza train/teste).
