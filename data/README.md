@@ -1,40 +1,45 @@
-# Dados
+# Data
 
-Este repositório traz um **subconjunto público** (594 clipes de 13 vídeos-fonte) do dataset do estudo — o conjunto completo é maior e em parte privado (ver artigo). Organiza-se assim:
+This repository ships a **public subset** (565 clips from 13 source videos) of the
+study's dataset — the full dataset used in the paper is larger and partly private (see
+paper). It is organized as follows:
 
-1. **13 vídeos-fonte completos** (públicos, do YouTube) — a matéria-prima, recortada pelo
-   **extrator de highlights** para gerar os clipes.
-2. **594 clipes já cortados e rotulados** — prontos para treinar o modelo; cada um rastreável
-   a uma das 13 fontes pelo nome do arquivo.
+1. **13 full source videos** (public, from YouTube) — the raw material, cut into
+   technique clips.
+2. **565 already-cut, labeled clips** — ready to train the model; each traceable to one
+   of the 13 sources by its filename.
 
-Segue o padrão de compêndio reproduzível:
+Follows the reproducible-compendium pattern:
 
-- **`input_data/`** — dados **originais e intocáveis**: a lista de fontes
-  (`fontes_videos.csv`) e, após baixar/obter, os **vídeos completos** em `videos_fonte/`.
-- **`analysis_data/`** — dados **transformados**: os **clipes** de ~4 s recortados dos
-  vídeos completos (é a entrada do treino). Obtidos via URLs dos vídeos-fonte ou gerados pelo extrator.
+- **`input_data/`** — **original, untouched** data: the source list (`video_sources.csv`)
+  and, once downloaded, the **full videos** in `videos_fonte/`.
+- **`analysis_data/`** — **transformed** data: the ~4s **clips** cut from the full videos
+  (this is the training input). Obtained from the source-video URLs.
 
-> Nada em `input_data/` é editado. As transformações geram saída em `analysis_data/`
-> ou em `results/`.
+> Nothing in `input_data/` is edited. Transformations write their output to
+> `analysis_data/` or `results/`.
 
-## Fluxo de dados
+## Data flow
 
 ```
-fontes_videos.csv ──(scripts/01_baixar_videos.py)──> input_data/videos_fonte/*.mp4
+video_sources.csv ──(scripts/01_download_videos.py)──> input_data/videos_fonte/*.mp4
                                                               │
-                          (extrator de highlights recorta os trechos dos golpes)
+                              (each clip is cut at its manifest interval)
                                                               ▼
-                                              analysis_data/clips/*.mp4   (rotulados)
+                                              analysis_data/clips/*.mp4   (labeled)
                                                               │
-                              (main.py: StratifiedGroupKFold por fonte, no treino)
+                          (main.py: StratifiedGroupKFold by source, during training)
                                                               ▼
-                                                     treino / validação cruzada
+                                                  training / cross-validation
 ```
 
-## Reprodução aproximada (não idêntica)
+## Approximate reproduction (not identical to the paper)
 
-Só os **vídeos públicos** são disponibilizados. Parte dos dados usados no experimento
-original era privada e **não** é redistribuída. Além disso, o split é **regenerado**
-automaticamente (`--group_split`) sobre os clipes disponíveis. Portanto, ao rodar este
-pacote você obtém um resultado **próximo**, não exatamente o `0,68 ± 0,03` do artigo.
-Os relatórios do experimento original ficam em `../results/cv_mc3_v2_40ep/` como referência.
+Only the **public videos** are released here. Part of the data used in the original
+experiment was private and is **not** redistributed. Because of that, evaluating this
+public subset with the released ensemble gives **Macro F1 = 0.769** (see
+[`../results/public_subset_evaluation_summary.json`](../results/public_subset_evaluation_summary.json)),
+not the paper's official **0.787 ± 0.027** (full private+public dataset, 10-fold
+cross-validation mean). The trained model weights themselves are the exact ones used for
+the paper — see [`../results/models/`](../results/models/) and the main
+[`README.md`](../README.md) for the full explanation of why the two numbers differ.

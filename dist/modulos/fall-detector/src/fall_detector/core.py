@@ -27,9 +27,9 @@ class StepOutput:
 
 class FallDetector:
     """
-    Biblioteca stateful. Mantém comportamento.
-    gate_fn: opcional, chamado SOMENTE quando há queda detectada.
-            recebe kps_da_pessoa (17,3) e deve retornar True (aceita) / False (rejeita)
+    Stateful library. Preserves behavior.
+    gate_fn: optional, called ONLY when a fall is detected.
+            receives the person's keypoints (17,3) and must return True (accept) / False (reject)
     """
 
     def __init__(self, cfg: Optional[FallDetectorConfig] = None):

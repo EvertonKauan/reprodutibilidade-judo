@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# Dados grandes (vêm do Zenodo, não do repositório)
+# Large data (regenerated from data/input_data/video_sources.csv, not versioned here)
 data/input_data/videos_fonte/
 data/analysis_data/clips/
 *.mp4

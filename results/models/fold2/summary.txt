@@ -1,0 +1,23 @@
+============================================================
+JUDO CLASSIFICATION SUMMARY
+============================================================
+Data dir:  /home/vpcuser/everton-mc-tcn/experimento_dataset_pro
+Output:    res_v6_mc3_rgb_fold2
+Model:     mc3_18
+Mode:      multiclass
+Spatial:   full_frame
+
+Dataset distribution:
+  sutemi_waza: total=736 train=552 val=111 test=73
+  tachi_waza: total=1334 train=999 val=200 test=135
+
+Test Accuracy:  0.8413
+Test Macro F1:  0.8217
+Best Val F1:    0.7752149338790525
+
+F1 per class:
+  sutemi_waza: 0.7626
+  tachi_waza: 0.8809
+
+Best model: res_v6_mc3_rgb_fold2/multiclass/best_model.pt
+============================================================

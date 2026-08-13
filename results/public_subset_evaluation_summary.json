@@ -1,0 +1,44 @@
+{
+  "description": "Evaluation of the MC3-18 RGB-only 10-fold ensemble on the subset of clips that are publicly redistributable in this repository (YouTube sources only). This number is NOT the official paper result (which uses the full private+public dataset); see README for why the two numbers differ.",
+  "total_public_clips_in_manifest": 594,
+  "unique_after_dedup": 589,
+  "evaluated": 565,
+  "label_corrected_since_original_manifest": 37,
+  "physically_removed_from_current_dataset": 17,
+  "excluded_or_not_in_any_fold_test_set": 7,
+  "accuracy": 0.8407079646017699,
+  "macro_f1": 0.7688636363636363,
+  "weighted_f1": 0.8393395012067579,
+  "per_class": {
+    "sutemi_waza": {
+      "precision": 0.6557377049180327,
+      "recall": 0.625,
+      "f1": 0.64,
+      "support": 128
+    },
+    "tachi_waza": {
+      "precision": 0.891647855530474,
+      "recall": 0.9038901601830663,
+      "f1": 0.8977272727272727,
+      "support": 437
+    }
+  },
+  "confusion_matrix": {
+    "labels": [
+      "sutemi_waza",
+      "tachi_waza"
+    ],
+    "matrix": [
+      [
+        80,
+        48
+      ],
+      [
+        42,
+        395
+      ]
+    ]
+  },
+  "correct": 475,
+  "errors": 90
+}

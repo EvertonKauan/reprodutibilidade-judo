@@ -1,0 +1,8 @@
+              precision    recall  f1-score   support
+
+ sutemi_waza       0.74      0.72      0.73        74
+  tachi_waza       0.84      0.86      0.85       133
+
+    accuracy                           0.81       207
+   macro avg       0.79      0.79      0.79       207
+weighted avg       0.81      0.81      0.81       207

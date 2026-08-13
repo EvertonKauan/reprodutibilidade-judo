@@ -1,86 +1,90 @@
-# detector_quedas — executável standalone
+# detector_quedas — standalone executable
 
-Empacotamento do detector de quedas (mesma lógica de `run_fall_batch_headless.py`,
-sem alteração na detecção) como executável, para reprodutibilidade do TCC.
+Packaging of the throw-detection module (same logic as `run_fall_batch_headless.py`,
+detection unchanged) as an executable, to support reproducibility of the associated
+thesis/paper.
 
-## Como funciona
+> **Naming note:** the executable and its companion script (`detector_quedas`,
+> `worker_deteccao.py`) keep their original names. They are a compiled artifact and a
+> script it invokes internally by that exact name; renaming either without rebuilding
+> and retesting the executable risks breaking it, so they were intentionally left
+> untouched while the rest of this repository was translated to English.
 
-O executável (`detector_quedas`) **não** embute `torch`/`ultralytics` — essas
-duas dependências são pesadas (centenas de MB a poucos GB com CUDA) e
-embuti-las deixaria o executável enorme e frágil entre máquinas/SOs
-diferentes. Em vez disso:
+## How it works
 
-1. Você instala `ultralytics` (que já traz `torch` como dependência) no seu
-   próprio Python:
+The executable (`detector_quedas`) does **not** bundle `torch`/`ultralytics` — these two
+dependencies are heavy (hundreds of MB to a few GB with CUDA), and bundling them would
+make the executable huge and fragile across different machines/OSes. Instead:
+
+1. You install `ultralytics` (which brings `torch` as a dependency) in your own Python:
    ```
    pip install ultralytics
    ```
-2. O executável faz uma checagem rápida no início. Se a dependência não
-   estiver instalada, mostra um aviso claro com o comando exato pra rodar,
-   e encerra sem travar/sem erro confuso.
-3. Se estiver tudo certo, o executável delega o processamento pesado (YOLO
-   pose + a lógica de detecção) para o **Python do sistema** via
-   subprocesso — não para um interpretador Python empacotado dentro do
-   executável. Isso evita problemas de biblioteca padrão incompleta que
-   acontecem ao tentar importar bibliotecas pesadas dentro de um
-   interpretador "congelado" (PyInstaller).
+2. The executable does a quick check at startup. If the dependency is not installed, it
+   shows a clear warning with the exact command to run, and exits cleanly (no crash, no
+   confusing error).
+3. If everything is fine, the executable delegates the heavy processing (YOLO pose + the
+   detection logic) to the **system Python** via a subprocess — not to a Python
+   interpreter bundled inside the executable. This avoids the incomplete-standard-library
+   issues that happen when trying to import heavy libraries inside a "frozen" interpreter
+   (PyInstaller).
 
-## Requisitos
+## Requirements
 
-- `pip install ultralytics` (traz `torch` junto) no Python que estiver no
-  `PATH` como `python3` (ou informe outro com `--python /caminho/pra/python3`).
-- `opencv-python` e `numpy` (também instalados automaticamente como
-  dependência do restante do pipeline).
-- **Conexão com a internet na primeira execução**: o peso `yolo11n-pose.pt`
-  (modelo de pose oficial da Ultralytics, não treinado por este projeto) não
-  vem junto nesta pasta — o próprio `ultralytics` baixa e faz cache dele
-  automaticamente na primeira vez que rodar (arquivo oficial deles, direto
-  do repositório `github.com/ultralytics/assets`). Isso evita redistribuir
-  um artefato de terceiros e mantém a licença do que a gente entrega mais
-  simples: só o código e o modelo próprio do projeto (`tatame_guard.pt`).
+- `pip install ultralytics` (brings `torch` along) in the Python that is on `PATH` as
+  `python3` (or point to another one with `--python /path/to/python3`).
+- `opencv-python` and `numpy` (also installed automatically as a dependency of the rest
+  of the pipeline).
+- **Internet connection on first run**: the `yolo11n-pose.pt` weights (Ultralytics'
+  official pose model, not trained by this project) do not ship in this folder —
+  `ultralytics` itself downloads and caches it automatically the first time it runs
+  (official file, straight from the `github.com/ultralytics/assets` repository). This
+  avoids redistributing a third-party artifact and keeps the license of what we ship
+  simpler: only the project's own code and model (`tatame_guard.pt`).
 
-## Conteúdo desta pasta (mantenha tudo junto)
+## Contents of this folder (keep everything together)
 
 ```
-detector_quedas          <- o executável em si
-worker_deteccao.py       <- roda no Python do sistema (não mexer)
-modulos/                 <- lógica de detecção (fall-detector)
+detector_quedas            <- the executable itself
+worker_deteccao.py        <- runs on the system Python (do not modify)
+modulos/                  <- detection logic (fall-detector)
 ```
 
-`yolo11n-pose.pt` (modelo oficial da Ultralytics, licença AGPL-3.0) **não**
-está nesta pasta — é baixado automaticamente pelo `ultralytics` na primeira
-execução e fica em cache no diretório onde o comando for rodado.
+`yolo11n-pose.pt` (Ultralytics' official model, AGPL-3.0 license) is **not** in this
+folder — it is downloaded automatically by `ultralytics` on first run and cached in the
+directory where the command is executed.
 
-## Observação sobre o `tatame_guard`
+## Note on `tatame_guard`
 
-Esta versão **não** inclui o `tatame_guard` (validação de que a queda ocorreu
-dentro da área do tatame). Isso simplifica o pacote distribuído, mas muda o
-comportamento: toda queda detectada pela pose é reportada, mesmo que tenha
-ocorrido fora do tatame (plateia, árbitro, etc.) — sem essa filtragem extra,
-o risco de falso positivo é maior.
+This version does **not** include `tatame_guard` (validation that the fall occurred
+inside the tatami area). This simplifies the distributed package, but changes the
+behavior: every fall detected by pose is reported, even if it occurred outside the
+tatami (crowd, referee, etc.) — without that extra filtering, the false-positive rate is
+higher. This is also documented in the paper: the throw-detection module "tends to
+overdetect events, occasionally identifying defensive postures or other non-throw
+movements as throws" — manual review of the automatically extracted clips is required
+before use.
 
-## Uso
+## Usage
 
 ```bash
 ./detector_quedas \
-  --list candidatos.json \
-  --videos-base /caminho/pros/videos \
-  --output relatorio_quedas.json
+  --list candidates.json \
+  --videos-base /path/to/videos \
+  --output throws_report.json
 ```
 
-`candidatos.json`: lista no formato `[{"id": "...", "arquivo": "video1.mp4"}, ...]`,
-onde `arquivo` é relativo a `--videos-base`.
+`candidates.json`: a list in the format `[{"id": "...", "arquivo": "video1.mp4"}, ...]`,
+where `arquivo` is relative to `--videos-base`.
 
-Saída (`relatorio_quedas.json`): lista com os timestamps (mm:ss) de cada
-queda detectada por vídeo — mesmo formato de `run_fall_batch_headless.py`.
+Output (`throws_report.json`): a list with the timestamps (mm:ss) of every detected
+throw per video — same format as `run_fall_batch_headless.py`.
 
-## Testado em
+## Tested on
 
-- Linux (Ubuntu/Pop!_OS), Python 3.10, ultralytics instalado via pip.
-- Verificado: (1) detecção real produz resultado idêntico ao script
-  original (mesmo vídeo, mesmas 8 quedas); (2) aviso de dependência
-  faltando aparece corretamente quando testado contra um venv sem
-  ultralytics/torch instalados.
-- **Não testado** em Windows/macOS — o mecanismo de achar o "Python do
-  sistema" via `python3`/`python` no PATH deve funcionar, mas não foi
-  verificado nessas plataformas.
+- Linux (Ubuntu/Pop!_OS), Python 3.10, ultralytics installed via pip.
+- Verified: (1) real detection produces results identical to the original script (same
+  video, same 8 detected throws); (2) the missing-dependency warning appears correctly
+  when tested against a venv without ultralytics/torch installed.
+- **Not tested** on Windows/macOS — the mechanism for finding the "system Python" via
+  `python3`/`python` on PATH should work, but has not been verified on those platforms.

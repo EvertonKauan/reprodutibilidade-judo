@@ -61,7 +61,7 @@ def analyze_keypoints_for_fall(
             euclidean_distance(sR, hR)
         ])
 
-        # PASSO 1 — remove cabeças
+        # STEP 1 — remove heads
         if dist_sh_hip < height * 0.15:
             falls.append(False)
             continue

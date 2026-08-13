@@ -67,6 +67,10 @@ IDX_TO_CLASS = {i: c for c, i in CLASS_TO_IDX.items()}
 # Binary mode: sutemi_waza vs tachi_waza (ashi_waza + te_waza merged)
 TACHI_CLASSES = ["sutemi_waza", "tachi_waza"]
 TACHI_CLASS_TO_IDX = {c: i for i, c in enumerate(TACHI_CLASSES)}
+
+# Binary mode: ashi_waza vs te_waza (sutemi_waza dropped entirely)
+ASHI_TE_CLASSES = ["ashi_waza", "te_waza"]
+ASHI_TE_CLASS_TO_IDX = {c: i for i, c in enumerate(ASHI_TE_CLASSES)}
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
 KINETICS_MEAN = [0.43216, 0.394666, 0.37645]
 KINETICS_STD  = [0.22803, 0.22145, 0.216989]
@@ -176,7 +180,14 @@ def get_args():
                         help="pos_weight in binary losses (OVR/OVO): n_neg/n_pos, sqrt of it, or disabled")
     # YOLO / spatial
     parser.add_argument("--spatial_mode", type=str, default="full_frame",
-                        choices=["full_frame", "yolo_union_crop", "yolo_masked"])
+                        choices=["full_frame", "yolo_union_crop", "yolo_masked", "edge_mask"])
+    # Static edge masking (removes scoreboard/sponsor overlays that sit at fixed screen
+    # margins, without needing any detector). Fraction of height/width blanked from each
+    # edge, applied identically to every frame (train and eval), before resize.
+    parser.add_argument("--mask_top", type=float, default=0.0)
+    parser.add_argument("--mask_bottom", type=float, default=0.0)
+    parser.add_argument("--mask_left", type=float, default=0.0)
+    parser.add_argument("--mask_right", type=float, default=0.0)
     parser.add_argument("--yolo_model_path", type=str, default="judo-ai-2c-yolo11-small.pt")
     parser.add_argument("--yolo_conf", type=float, default=0.25)
     parser.add_argument("--yolo_iou", type=float, default=0.45)
@@ -187,9 +198,9 @@ def get_args():
     parser.add_argument("--yolo_smoothing_alpha", type=float, default=0.70)
     parser.add_argument("--yolo_box_mode", type=str, default="per_frame",
                         choices=["per_frame", "static"],
-                        help="per_frame: box segue os atletas a cada frame (comportamento original). "
-                             "static: uma unica box por video (uniao temporal das deteccoes) — "
-                             "remove o fundo sem injetar movimento falso de camera no clipe.")
+                        help="per_frame: box follows the athletes on every frame (original behavior). "
+                             "static: a single box per video (temporal union of the detections) — "
+                             "removes the background without injecting false camera motion into the clip.")
     parser.add_argument("--save_cropped_debug", type=str, default="false")
     parser.add_argument("--max_debug_videos", type=int, default=20)
     parser.add_argument("--mask_background_mode", type=str, default="darken",
@@ -205,6 +216,9 @@ def get_args():
     # Binary tachi_waza mode
     parser.add_argument("--binary_tachi", action="store_true",
                         help="Binary mode: sutemi_waza vs tachi_waza (ashi_waza+te_waza merged). Forces multiclass.")
+    # Binary ashi_waza vs te_waza mode (sutemi_waza dropped)
+    parser.add_argument("--binary_ashi_te", action="store_true",
+                        help="Binary mode: ashi_waza vs te_waza (sutemi_waza dropped entirely). Forces multiclass.")
     # Manual exclusion list (label review)
     parser.add_argument("--exclude_videos", type=str, default=None,
                         help="Path to a text file with one filename per line (with or without "
@@ -218,32 +232,32 @@ def get_args():
                              "in balance_dropped.csv.")
     # Grouped (leakage-free) split by source video
     parser.add_argument("--group_split", action="store_true",
-                        help="Split por FONTE em vez de por video: usa StratifiedGroupKFold agrupando "
-                             "clipes do mesmo video de origem (source_id derivado do nome do arquivo). "
-                             "Impede o vazamento de contexto (near-duplicates da mesma luta em train E "
-                             "test). Mantem estratificacao por classe e as fracoes ~train/val/test. "
-                             "Gera source_groups.csv (auditoria) e verifica que nenhum grupo cruza splits.")
+                        help="Split by SOURCE instead of by video: uses StratifiedGroupKFold grouping "
+                             "clips from the same source video (source_id derived from the filename). "
+                             "Prevents context leakage (near-duplicates from the same match in train AND "
+                             "test). Keeps class stratification and the ~train/val/test fractions. "
+                             "Generates source_groups.csv (audit) and verifies that no group crosses splits.")
     parser.add_argument("--group_fold", type=int, default=0,
-                        help="Qual fold vira o TESTE no --group_split (0..k-1, k=round(1/test_split)). "
-                             "Rotacionar 0,1,2,... com a mesma seed = validacao cruzada por fonte.")
-    # Two-stream / fluxo optico (item 4)
+                        help="Which fold becomes the TEST set in --group_split (0..k-1, k=round(1/test_split)). "
+                             "Rotating 0,1,2,... with the same seed = cross-validation by source.")
+    # Two-stream / optical flow (item 4)
     parser.add_argument("--input_modality", type=str, default="rgb",
                         choices=["rgb", "flow", "two_stream"],
-                        help="rgb (padrao) | flow (fluxo optico Farneback) | two_stream (RGB+flow, "
-                             "fusao tardia de features). flow/two_stream so valem com mode=multiclass "
-                             "(inclui --binary_tachi) e usam full_frame (YOLO ignorado na v1).")
+                        help="rgb (default) | flow (Farneback optical flow) | two_stream (RGB+flow, "
+                             "late feature fusion). flow/two_stream only apply with mode=multiclass "
+                             "(includes --binary_tachi) and use full_frame (YOLO ignored in v1).")
     parser.add_argument("--flow_cache_dir", type=str, default=None,
-                        help="Diretorio do cache de fluxo (.npy por video, quantizado uint8). "
-                             "Default: <pai de data_dir>/flow_cache_nf<N>_sz<S>.")
+                        help="Optical flow cache directory (.npy per video, uint8-quantized). "
+                             "Default: <parent of data_dir>/flow_cache_nf<N>_sz<S>.")
     parser.add_argument("--flow_bound", type=float, default=20.0,
-                        help="Clip do fluxo em pixels p/ quantizacao/normalizacao (u,v em [-bound,bound]).")
+                        help="Flow clipping bound in pixels for quantization/normalization (u,v in [-bound,bound]).")
     parser.add_argument("--precompute_flow", action="store_true",
-                        help="So pre-computa o cache de fluxo de todos os videos do split e sai (sem treinar).")
+                        help="Only precomputes the flow cache for every video in the split and exits (no training).")
     parser.add_argument("--recursive_scan", action="store_true",
-                        help="Escaneia data_dir recursivamente (subpastas). Util p/ datasets aninhados "
-                             "(ex.: mega_dataset/<sub>/*.mp4) sem precisar achatar num dir plano. "
-                             "Basenames devem ser unicos (cache/split sao keyed por basename); "
-                             "duplicados sao ignorados com aviso.")
+                        help="Scans data_dir recursively (subfolders). Useful for nested datasets "
+                             "(e.g., mega_dataset/<sub>/*.mp4) without having to flatten them into a single dir. "
+                             "Basenames must be unique (cache/split are keyed by basename); "
+                             "duplicates are skipped with a warning.")
     return parser.parse_args()
 
 
@@ -278,19 +292,19 @@ def infer_class(filename):
 
 
 def extract_source_id(filename):
-    """Extrai o identificador da FONTE (video/luta de origem) a partir do nome do arquivo.
+    """Extracts the SOURCE identifier (source video/match) from the filename.
 
-    Varios clipes vem do mesmo video de origem (mesma luta/competicao) — sao
-    near-duplicates que vazam contexto entre splits se caírem em train E test.
-    Agrupar por fonte (StratifiedGroupKFold) impede esse vazamento.
+    Several clips come from the same source video (same match/competition) — they
+    are near-duplicates that leak context between splits if they fall into train AND test.
+    Grouping by source (StratifiedGroupKFold) prevents this leakage.
 
-    Padroes observados no dataset (todos casados, 0 fallbacks):
-      - `pro_37615_1_hl00_0m11`         -> fonte `pro_37615`  (base de highlights)
-      - `2M0AufUQqrY_luta03_sub02`      -> fonte `2m0aufuqqry` (id de video YouTube)
-      - `9kw7Wa16CCM_luta01`            -> fonte `9kw7wa16ccm` (sem _sub)
-      - `KQ42cd2XwEY_luta05_06_sub01`   -> fonte `kq42cd2xwey`
-      - `youtube_2026-06-02_08-34-47`   -> fonte `youtube_2026-06-02_08-34-47` (gravacao unica)
-    Fallback (nenhum padrao): o proprio stem vira o grupo (clipe isolado, sem vazamento).
+    Patterns observed in the dataset (all matched, 0 fallbacks):
+      - `pro_37615_1_hl00_0m11`         -> source `pro_37615`  (highlights database)
+      - `2M0AufUQqrY_luta03_sub02`      -> source `2m0aufuqqry` (YouTube video id)
+      - `9kw7Wa16CCM_luta01`            -> source `9kw7wa16ccm` (no _sub)
+      - `KQ42cd2XwEY_luta05_06_sub01`   -> source `kq42cd2xwey`
+      - `youtube_2026-06-02_08-34-47`   -> source `youtube_2026-06-02_08-34-47` (single recording)
+    Fallback (no pattern matches): the stem itself becomes the group (isolated clip, no leakage).
     """
     stem = os.path.splitext(os.path.basename(str(filename)))[0]
     low = stem.lower()
@@ -332,9 +346,9 @@ def scan_dataset(data_dir, recursive=False):
         if cls is None:
             logger.debug(f"Skipping {p.name}: no class pattern found")
             continue
-        # cache/split sao keyed por basename -> basenames precisam ser unicos
+        # cache/split are keyed by basename -> basenames must be unique
         if p.name in seen:
-            logger.warning(f"Basename duplicado ignorado (scan): {p.name} <- {p}")
+            logger.warning(f"Duplicate basename skipped (scan): {p.name} <- {p}")
             continue
         seen.add(p.name)
         label = CLASS_TO_IDX[cls]
@@ -358,11 +372,11 @@ def scan_dataset(data_dir, recursive=False):
 # ==============================================================
 
 def apply_exclude_list(df, list_path, output_dir):
-    """Remove do dataset os videos listados em um arquivo texto (revisao manual de labels).
-    Casamento por nome de arquivo sem extensao (robusto a caminho/extensao).
-    Nunca silencioso: removidos vao para excluded_videos.csv; nomes nao encontrados geram warning."""
+    """Removes from the dataset the videos listed in a text file (manual label review).
+    Matching is done by filename without extension (robust to path/extension).
+    Never silent: removed videos go to excluded_videos.csv; names not found raise a warning."""
     if not os.path.exists(list_path):
-        logger.error(f"--exclude_videos: arquivo nao encontrado: {list_path}")
+        logger.error(f"--exclude_videos: file not found: {list_path}")
         sys.exit(1)
     wanted = set()
     with open(list_path, encoding="utf-8") as f:
@@ -377,22 +391,22 @@ def apply_exclude_list(df, list_path, output_dir):
     excluded = df[mask]
     excluded_path = Path(output_dir) / "excluded_videos.csv"
     excluded.to_csv(excluded_path, index=False)
-    logger.info(f"exclude_videos: {int(mask.sum())} de {len(wanted)} listados removidos "
-                f"(registrados em {excluded_path})")
+    logger.info(f"exclude_videos: {int(mask.sum())} of {len(wanted)} listed were removed "
+                f"(recorded in {excluded_path})")
     for cls, n in excluded["class_name"].value_counts().items():
-        logger.info(f"  excluido: {cls}: {n}")
+        logger.info(f"  excluded: {cls}: {n}")
     missing = wanted - set(stems)
     if missing:
-        logger.warning(f"exclude_videos: {len(missing)} nomes da lista NAO encontrados no dataset: "
+        logger.warning(f"exclude_videos: {len(missing)} names from the list NOT found in the dataset: "
                        f"{sorted(missing)}")
     return df[~mask].reset_index(drop=True)
 
 
 def balance_dataset_df(df, seed, output_dir):
-    """Undersampling deterministico no nivel do dataset (antes do split):
-    reduz todas as classes ao tamanho da menor, por sorteio com seed fixa
-    (neutro: nao escolhe videos por nenhum criterio alem do aleatorio).
-    Os descartados nunca somem silenciosamente: ficam em balance_dropped.csv."""
+    """Deterministic undersampling at the dataset level (before the split):
+    reduces every class to the minority class size, by seeded random draw
+    (neutral: does not pick videos by any criterion other than randomness).
+    Dropped videos never disappear silently: they go into balance_dropped.csv."""
     counts = df["class_name"].value_counts()
     n_min = int(counts.min())
     kept_parts, dropped_parts = [], []
@@ -407,14 +421,14 @@ def balance_dataset_df(df, seed, output_dir):
     dropped.to_csv(dropped_path, index=False)
     for cls in counts.index:
         logger.info(f"  balance_dataset: {cls}: {int(counts[cls])} -> {n_min}")
-    logger.info(f"balance_dataset: {len(dropped)} videos descartados (registrados em {dropped_path})")
+    logger.info(f"balance_dataset: {len(dropped)} videos dropped (recorded in {dropped_path})")
     return kept
 
 
 def _finalize_splits(df, idx_val, idx_test, output_dir, classes):
-    """Escreve a coluna split (por indices posicionais de val/test; resto = train),
-    salva splits.csv e class_distribution.csv, e devolve (train_df, val_df, test_df, dist_df).
-    Compartilhado por make_splits (por video) e make_group_splits (por fonte)."""
+    """Writes the split column (from positional val/test indices; the rest = train),
+    saves splits.csv and class_distribution.csv, and returns (train_df, val_df, test_df, dist_df).
+    Shared by make_splits (by video) and make_group_splits (by source)."""
     df = df.copy()
     df["split"] = "train"
     df.iloc[idx_val, df.columns.get_loc("split")] = "val"
@@ -472,22 +486,22 @@ def make_splits(df, train_split, val_split, test_split, seed, output_dir, classe
 
 def make_group_splits(df, train_split, val_split, test_split, seed, output_dir,
                       classes=None, fold=0):
-    """Split por FONTE (leakage-free) com StratifiedGroupKFold.
+    """Split by SOURCE (leakage-free) using StratifiedGroupKFold.
 
-    Agrupa por `source_id` (clipes do mesmo video de origem ficam juntos), estratificando
-    por classe. Dois cortes aninhados: (1) separa o TESTE como um fold de k=round(1/test_split);
-    (2) do restante separa a VAL como um fold de k'=round(1/(val_split/(1-test_split))).
-    Determinístico por `seed`. `fold` escolhe qual dos k folds vira teste (rotacionar =
-    validacao cruzada por fonte). Nenhum grupo cruza splits (verificado por assert)."""
+    Groups by `source_id` (clips from the same source video stay together), stratifying
+    by class. Two nested cuts: (1) separates the TEST set as one fold of k=round(1/test_split);
+    (2) from the remainder, separates VAL as one fold of k'=round(1/(val_split/(1-test_split))).
+    Deterministic given `seed`. `fold` selects which of the k folds becomes the test set (rotating =
+    cross-validation by source). No group crosses splits (verified via assert)."""
     if classes is None:
         classes = CLASSES
     assert abs(train_split + val_split + test_split - 1.0) < 1e-6, "Splits must sum to 1"
     if not STRATIFIED_GROUP_KFOLD_AVAILABLE:
-        logger.error("--group_split requer StratifiedGroupKFold (scikit-learn >= 0.24). "
-                     "Atualize o scikit-learn.")
+        logger.error("--group_split requires StratifiedGroupKFold (scikit-learn >= 0.24). "
+                     "Please upgrade scikit-learn.")
         sys.exit(1)
     if "source_id" not in df.columns:
-        logger.error("--group_split: coluna 'source_id' ausente (scan_dataset nao a gerou).")
+        logger.error("--group_split: column 'source_id' missing (scan_dataset did not generate it).")
         sys.exit(1)
 
     labels = df["label"].values
@@ -529,24 +543,24 @@ def make_group_splits(df, train_split, val_split, test_split, seed, output_dir,
         logger.error(f"group_split: VAZAMENTO detectado — {len(leaks)} fontes em >1 split: "
                      f"{sorted(leaks)[:10]}")
         sys.exit(1)
-    logger.info(f"group_split: OK — 0 fontes cruzando splits "
-                f"(train={len(g_train)} val={len(g_val)} test={len(g_test)} fontes; "
+    logger.info(f"group_split: OK — 0 sources crossing splits "
+                f"(train={len(g_train)} val={len(g_val)} test={len(g_test)} sources; "
                 f"k_test={k_test} fold={fold})")
 
     train_df, val_df, test_df, dist_df = _finalize_splits(df, idx_val, idx_test, output_dir, classes)
 
-    # Auditoria por fonte: fonte, split, n, breakdown por classe
+    # Per-source audit: source, split, n, breakdown by class
     split_col = pd.Series(
         np.where(np.isin(idx, idx_test), "test",
         np.where(np.isin(idx, idx_val), "val", "train")),
-        index=df.index)  # alinhamento posicional -> rotulos reais do df (robusto a index)
+        index=df.index)  # positional alignment -> real df labels (robust to index)
     audit = (df.assign(split=split_col)
                .groupby(["source_id", "split", "class_name"]).size()
                .reset_index(name="n")
                .sort_values(["split", "source_id", "class_name"]))
     audit_path = Path(output_dir) / "source_groups.csv"
     audit.to_csv(audit_path, index=False)
-    logger.info(f"group_split: auditoria por fonte salva em {audit_path}")
+    logger.info(f"group_split: per-source audit saved to {audit_path}")
 
     return train_df, val_df, test_df, dist_df
 
@@ -823,8 +837,8 @@ class YOLOProcessor:
             return list(frames_rgb), log
 
         if self.box_mode == "static":
-            # Uma unica box para o video inteiro: uniao temporal das boxes detectadas.
-            # Geometria fixa em todos os frames — nao injeta zoom/pan falso no clipe.
+            # A single box for the entire video: temporal union of the detected boxes.
+            # Fixed geometry across all frames — does not inject false zoom/pan into the clip.
             detected = [b for b in boxes_per_frame if b is not None]
             static_box = [
                 min(b[0] for b in detected),
@@ -926,10 +940,33 @@ def get_val_transform(image_size):
     ])
 
 
+def apply_edge_mask(frames, top=0.0, bottom=0.0, left=0.0, right=0.0, fill=0):
+    """Blackens fixed margins (fraction of H/W) on every frame — removes static overlays
+    (scoreboard, sponsor banners) that sit at a fixed screen position, without any
+    detector. Same margins applied identically train/val/test (deterministic)."""
+    out = []
+    for f in frames:
+        f = np.array(f, dtype=np.uint8).copy()
+        h, w = f.shape[:2]
+        t, b = int(round(h * top)), int(round(h * bottom))
+        l, r = int(round(w * left)), int(round(w * right))
+        if t > 0:
+            f[:t, :] = fill
+        if b > 0:
+            f[h - b:, :] = fill
+        if l > 0:
+            f[:, :l] = fill
+        if r > 0:
+            f[:, w - r:] = fill
+        out.append(f)
+    return out
+
+
 class JudoVideoDataset(Dataset):
     def __init__(self, df, num_frames, image_size, is_train, temporal_jitter,
                  spatial_mode, yolo_processor, bad_videos_list, binary_labels=None,
-                 modality="rgb", flow_cache_dir=None, flow_bound=20.0):
+                 modality="rgb", flow_cache_dir=None, flow_bound=20.0,
+                 mask_top=0.0, mask_bottom=0.0, mask_left=0.0, mask_right=0.0):
         self.df = df.reset_index(drop=True)
         self.num_frames = num_frames
         self.image_size = image_size
@@ -944,6 +981,10 @@ class JudoVideoDataset(Dataset):
         self.modality = modality
         self.flow_cache_dir = flow_cache_dir
         self.flow_bound = flow_bound
+        self.mask_top = mask_top
+        self.mask_bottom = mask_bottom
+        self.mask_left = mask_left
+        self.mask_right = mask_right
         self.transform = get_train_transform(image_size) if is_train else get_val_transform(image_size)
         self.yolo_logs = []
 
@@ -957,20 +998,21 @@ class JudoVideoDataset(Dataset):
 
         need_rgb = self.modality in ("rgb", "two_stream")
         need_flow = self.modality in ("flow", "two_stream")
-        use_yolo = self.spatial_mode != "full_frame" and self.yolo_processor is not None
-        # fluxo so reusa o crop/mask do YOLO quando os frames sao carregados 1x e compartilhados
-        # entre os dois ramos (ver load_or_compute_flow_from_frames); caso contrario o fluxo
-        # segue o caminho antigo (reabre o video, sempre full_frame, cache sem tag)
-        need_shared_frames = need_rgb or (need_flow and use_yolo)
+        use_yolo = self.spatial_mode != "full_frame" and self.spatial_mode != "edge_mask" and self.yolo_processor is not None
+        use_edge_mask = self.spatial_mode == "edge_mask"
+        # flow only reuses the crop/mask (YOLO or edge_mask) when frames are loaded once and
+        # shared between the two branches (see load_or_compute_flow_from_frames); otherwise
+        # flow follows the old path (reopens the video, always full_frame, untagged cache)
+        need_shared_frames = need_rgb or (need_flow and (use_yolo or use_edge_mask))
 
-        processed_frames = None  # frames pos-YOLO (crop/mask), reutilizados pelo ramo de fluxo
+        processed_frames = None  # post-YOLO frames (crop/mask), reused by the flow branch
         rgb_tensor = None
         if need_shared_frames:
             try:
                 frames = VIDEO_LOADER.load(
                     path, self.num_frames,
                     is_train=self.is_train,
-                    # flow/two_stream: sampling deterministico p/ alinhar RGB com o cache de fluxo
+                    # flow/two_stream: deterministic sampling to align RGB with the flow cache
                     temporal_jitter=self.temporal_jitter and self.is_train and self.modality == "rgb",
                 )
             except Exception as e:
@@ -978,7 +1020,7 @@ class JudoVideoDataset(Dataset):
                 self.bad_videos.append({"video_path": path, "filename": row["filename"], "error": str(e)})
                 return None
 
-            # YOLO preprocessing — calculado 1x so, compartilhado por RGB e fluxo (mesma box)
+            # YOLO preprocessing — computed once, shared between RGB and flow (same box)
             if use_yolo:
                 try:
                     frames_list = list(frames)
@@ -986,7 +1028,14 @@ class JudoVideoDataset(Dataset):
                     self.yolo_logs.append(yolo_log)
                 except Exception as e:
                     logger.warning(f"YOLO processing failed for {path}: {e}")
-                    processed_frames = None  # cai p/ full_frame nos dois ramos
+                    processed_frames = None  # falls back to full_frame on both branches
+            elif use_edge_mask:
+                # static mask (same margins on every frame/video) — removes scoreboard/sponsor
+                # overlay without needing a detector, shared between RGB and flow
+                processed_frames = apply_edge_mask(
+                    frames, top=self.mask_top, bottom=self.mask_bottom,
+                    left=self.mask_left, right=self.mask_right,
+                )
 
             if need_rgb:
                 src = processed_frames if processed_frames is not None else frames
@@ -1006,10 +1055,13 @@ class JudoVideoDataset(Dataset):
         flow_tensor = None
         if need_flow:
             try:
-                if use_yolo and processed_frames is not None:
-                    tag = "_ycrop" if self.spatial_mode == "yolo_union_crop" else "_ymask"
-                    if self.yolo_processor.box_mode == "static":
-                        tag += "_static"
+                if (use_yolo or use_edge_mask) and processed_frames is not None:
+                    if use_edge_mask:
+                        tag = "_emask"
+                    else:
+                        tag = "_ycrop" if self.spatial_mode == "yolo_union_crop" else "_ymask"
+                        if self.yolo_processor.box_mode == "static":
+                            tag += "_static"
                     uv = load_or_compute_flow_from_frames(
                         processed_frames, row["filename"], self.num_frames, self.image_size,
                         self.flow_bound, self.flow_cache_dir, spatial_tag=tag, save=True,
@@ -1029,7 +1081,7 @@ class JudoVideoDataset(Dataset):
             out = rgb_tensor
         elif self.modality == "flow":
             out = flow_tensor
-        else:  # two_stream: empilha nos canais -> [6, T, H, W]
+        else:  # two_stream: stacks along channels -> [6, T, H, W]
             out = torch.cat([rgb_tensor, flow_tensor], dim=0)
         return out, label, path, row["filename"]
 
@@ -1059,9 +1111,9 @@ def _flow_cache_path(cache_dir, filename, num_frames, image_size, spatial_tag=""
 
 
 def compute_flow_uv(frames_rgb, image_size):
-    """frames_rgb: iteravel de [H,W,3] uint8 (RGB). Retorna [T,H,W,2] float32 (u,v em px),
-    Farneback entre frames consecutivos redimensionados p/ image_size. Ultimo flow repetido
-    para T = num_frames (alinha 1:1 com o clip RGB)."""
+    """frames_rgb: iterable of [H,W,3] uint8 (RGB). Returns [T,H,W,2] float32 (u,v in px),
+    Farneback between consecutive frames resized to image_size. Last flow repeated
+    so T = num_frames (aligns 1:1 with the RGB clip)."""
     grays = []
     for f in frames_rgb:
         g = cv2.resize(np.asarray(f, dtype=np.uint8), (image_size, image_size))
@@ -1086,10 +1138,10 @@ def _dequantize_flow(q, bound):
 
 
 def load_or_compute_flow(path, filename, num_frames, image_size, bound, cache_dir, save=True, spatial_tag=""):
-    """Carrega o fluxo do cache (.npy uint8) ou computa on-the-fly (e salva). Usa SEMPRE o
-    sampling deterministico (linspace, is_train=False) para casar com o cache e com o stream RGB.
-    Sempre opera sobre o video ORIGINAL (full_frame); use load_or_compute_flow_from_frames
-    quando o fluxo deve enxergar o mesmo crop/mask YOLO do ramo RGB."""
+    """Loads flow from the cache (.npy uint8) or computes it on-the-fly (and saves it). ALWAYS
+    uses deterministic sampling (linspace, is_train=False) to match the cache and the RGB stream.
+    Always operates on the ORIGINAL video (full_frame); use load_or_compute_flow_from_frames
+    when flow needs to see the same YOLO crop/mask as the RGB branch."""
     cpath = _flow_cache_path(cache_dir, filename, num_frames, image_size, spatial_tag) if cache_dir else None
     if cpath and os.path.exists(cpath):
         return _dequantize_flow(np.load(cpath), bound)
@@ -1103,11 +1155,12 @@ def load_or_compute_flow(path, filename, num_frames, image_size, bound, cache_di
 
 def load_or_compute_flow_from_frames(frames, filename, num_frames, image_size, bound, cache_dir,
                                       spatial_tag, save=True):
-    """Como load_or_compute_flow, mas recebe frames JA carregados (e ja processados pelo YOLO,
-    quando aplicavel) em vez de reabrir o video do zero. Usado quando spatial_mode != full_frame,
-    para o fluxo optico enxergar exatamente a mesma regiao (mesma box) que o ramo RGB — evita
-    computar fluxo sobre o video cru enquanto o RGB ve so o crop dos atletas (o que injetaria
-    pan/zoom falso entre os dois ramos). spatial_tag diferencia o cache do fluxo full_frame."""
+    """Like load_or_compute_flow, but receives frames ALREADY loaded (and already processed by
+    YOLO, when applicable) instead of reopening the video from scratch. Used when spatial_mode
+    != full_frame, so optical flow sees exactly the same region (same box) as the RGB branch —
+    avoids computing flow on the raw video while RGB only sees the athlete crop (which would
+    inject false pan/zoom between the two branches). spatial_tag differentiates this cache from
+    the full_frame flow cache."""
     cpath = _flow_cache_path(cache_dir, filename, num_frames, image_size, spatial_tag) if cache_dir else None
     if cpath and os.path.exists(cpath):
         return _dequantize_flow(np.load(cpath), bound)
@@ -1119,7 +1172,7 @@ def load_or_compute_flow_from_frames(frames, filename, num_frames, image_size, b
 
 
 def flow_uv_to_tensor(uv, bound):
-    """uv [T,H,W,2] float (px) -> tensor [3,T,H,W] com (u, v, magnitude) normalizados p/ ~[-1,1]."""
+    """uv [T,H,W,2] float (px) -> tensor [3,T,H,W] with (u, v, magnitude) normalized to ~[-1,1]."""
     u = uv[..., 0] / bound
     v = uv[..., 1] / bound
     mag = np.sqrt(uv[..., 0] ** 2 + uv[..., 1] ** 2) / bound
@@ -1128,7 +1181,7 @@ def flow_uv_to_tensor(uv, bound):
 
 
 def precompute_flow_dataset(df, args):
-    """Pre-computa e cacheia o fluxo de todos os videos do df (uso local, CPU). Idempotente."""
+    """Precomputes and caches optical flow for every video in df (local use, CPU). Idempotent."""
     cache_dir = _flow_default_cache_dir(args)
     os.makedirs(cache_dir, exist_ok=True)
     logger.info(f"[precompute_flow] {len(df)} videos -> {cache_dir} "
@@ -1190,7 +1243,7 @@ def _load_video_backbone(model_name, pretrained=True):
 
 def _make_head(in_features, num_classes, dropout):
     head = nn.Linear(in_features, num_classes)
-    # Dropout antes da fc (chaves do state_dict viram fc.0/fc.1 quando ativo)
+    # Dropout before fc (state_dict keys become fc.0/fc.1 when active)
     return nn.Sequential(nn.Dropout(p=dropout), head) if dropout > 0 else head
 
 
@@ -1201,10 +1254,10 @@ def build_model(model_name, num_classes, pretrained=True, dropout=0.0):
 
 
 class TwoStreamVideoModel(nn.Module):
-    """Fusao tardia RGB + fluxo optico. Entrada: [B,6,T,H,W] (canais 0:3=RGB, 3:6=flow).
-    Dois backbones identicos (feature extractors) + cabeca de fusao unica chamada `.fc` — assim
-    o congelamento (`"fc" not in name`) e os grupos do otimizador (`model.fc`) funcionam sem
-    alteracao. flow-only usa build_model (rede unica de 3 canais)."""
+    """RGB + optical flow fusion via feature concatenation. Input: [B,6,T,H,W] (channels 0:3=RGB, 3:6=flow).
+    Two independent backbones (feature extractors, no weight sharing) + a single fusion head called
+    `.fc` — this way freezing (`"fc" not in name`) and the optimizer parameter groups (`model.fc`)
+    work without any change. flow-only uses build_model (single 3-channel network)."""
 
     def __init__(self, model_name, num_classes, pretrained=True, dropout=0.0):
         super().__init__()
@@ -1225,7 +1278,7 @@ class TwoStreamVideoModel(nn.Module):
 def build_model_for_modality(args, num_classes, dropout=0.0):
     if getattr(args, "input_modality", "rgb") == "two_stream":
         return TwoStreamVideoModel(args.model, num_classes, pretrained=True, dropout=dropout)
-    # rgb e flow usam a mesma rede de 3 canais (flow -> (u, v, magnitude))
+    # rgb and flow use the same 3-channel network (flow -> (u, v, magnitude))
     return build_model(args.model, num_classes, pretrained=True, dropout=dropout)
 
 
@@ -1360,8 +1413,8 @@ def make_binary_train_criterion(n_pos, n_neg, args, device):
 
 
 def make_phase_scheduler(optimizer, args, n_epochs):
-    """Scheduler por fase: plateau (comportamento original) ou warmup+cosine,
-    que decai deterministicamente e nao reage ao ruido da validacao."""
+    """Per-phase scheduler: plateau (original behavior) or warmup+cosine,
+    which decays deterministically and does not react to validation noise."""
     if getattr(args, "scheduler", "plateau") == "cosine":
         warmup = max(0, min(getattr(args, "warmup_epochs", 2), max(n_epochs - 1, 0)))
 
@@ -1570,24 +1623,28 @@ def make_dataloaders(train_df, val_df, test_df, args, device,
     flow_cache_dir = _flow_default_cache_dir(args) if modality != "rgb" else None
     flow_bound = getattr(args, "flow_bound", 20.0)
     flow_kw = dict(modality=modality, flow_cache_dir=flow_cache_dir, flow_bound=flow_bound)
+    mask_kw = dict(
+        mask_top=getattr(args, "mask_top", 0.0), mask_bottom=getattr(args, "mask_bottom", 0.0),
+        mask_left=getattr(args, "mask_left", 0.0), mask_right=getattr(args, "mask_right", 0.0),
+    )
 
     train_ds = JudoVideoDataset(
         train_df, args.num_frames, args.image_size, is_train=True,
         temporal_jitter=parse_bool(args.temporal_jitter),
         spatial_mode=args.spatial_mode, yolo_processor=yolo_processor,
-        bad_videos_list=bad_videos, binary_labels=binary_labels_train, **flow_kw,
+        bad_videos_list=bad_videos, binary_labels=binary_labels_train, **flow_kw, **mask_kw,
     )
     val_ds = JudoVideoDataset(
         val_df, args.num_frames, args.image_size, is_train=False,
         temporal_jitter=False, spatial_mode=args.spatial_mode,
         yolo_processor=yolo_processor, bad_videos_list=bad_videos,
-        binary_labels=binary_labels_val, **flow_kw,
+        binary_labels=binary_labels_val, **flow_kw, **mask_kw,
     )
     test_ds = JudoVideoDataset(
         test_df, args.num_frames, args.image_size, is_train=False,
         temporal_jitter=False, spatial_mode=args.spatial_mode,
         yolo_processor=yolo_processor, bad_videos_list=bad_videos,
-        binary_labels=binary_labels_test, **flow_kw,
+        binary_labels=binary_labels_test, **flow_kw, **mask_kw,
     )
 
     # Sampler
@@ -1674,10 +1731,10 @@ def run_multiclass(args, train_df, val_df, test_df, device, yolo_processor, bad_
         model = nn.DataParallel(model)
         logger.info(f"Model wrapped with DataParallel ({torch.cuda.device_count()} GPUs)")
 
-    # Override criterion with class weights if needed. Deliberadamente SO
-    # "class_weights" (nao "weighted_sampler" tambem) -- balance_strategy=weighted_sampler
-    # deve corrigir o desbalanceamento so via sampler, sem tambem reponderar a loss
-    # (dupla correcao), mesmo problema ja documentado no CLAUDE.md para o OVR.
+    # Override criterion with class weights if needed. Deliberately ONLY for
+    # "class_weights" (not also "weighted_sampler") -- balance_strategy=weighted_sampler
+    # should correct the imbalance only via the sampler, without also reweighting the loss
+    # (double correction), the same issue already documented in CLAUDE.md for OVR.
     label_smoothing = getattr(args, "label_smoothing", 0.0)
     if args.balance_strategy == "class_weights":
         cw = get_class_weights(train_df["label"].values, len(classes), device)
@@ -1746,7 +1803,7 @@ def _train_model_with_criterion(model, train_loader, val_loader, device, args, o
         total_loss = 0.0
         all_preds, all_labels_ep = [], []
         optimizer.zero_grad()
-        pending = False  # ha gradientes acumulados sem step
+        pending = False  # accumulated gradients without a step
 
         def opt_step():
             if use_amp and device.type == "cuda":
@@ -2094,24 +2151,28 @@ def run_ovo(args, train_df, val_df, test_df, device, yolo_processor, bad_videos)
         criterion_eval  = nn.BCEWithLogitsLoss()
 
         # Train loader uses only the pair subset
+        _mask_kw = dict(
+            mask_top=getattr(args, "mask_top", 0.0), mask_bottom=getattr(args, "mask_bottom", 0.0),
+            mask_left=getattr(args, "mask_left", 0.0), mask_right=getattr(args, "mask_right", 0.0),
+        )
         train_ds_pair = JudoVideoDataset(
             train_pair, args.num_frames, args.image_size, is_train=True,
             temporal_jitter=parse_bool(args.temporal_jitter),
             spatial_mode=args.spatial_mode, yolo_processor=yolo_processor,
-            bad_videos_list=bad_videos, binary_labels=bin_train_pair,
+            bad_videos_list=bad_videos, binary_labels=bin_train_pair, **_mask_kw,
         )
         val_ds_pair = JudoVideoDataset(
             val_pair, args.num_frames, args.image_size, is_train=False,
             temporal_jitter=False, spatial_mode=args.spatial_mode,
             yolo_processor=yolo_processor, bad_videos_list=bad_videos,
-            binary_labels=bin_val_pair,
+            binary_labels=bin_val_pair, **_mask_kw,
         )
         # Test uses ALL test videos
         test_ds_all = JudoVideoDataset(
             test_df, args.num_frames, args.image_size, is_train=False,
             temporal_jitter=False, spatial_mode=args.spatial_mode,
             yolo_processor=yolo_processor, bad_videos_list=bad_videos,
-            binary_labels=bin_test_all,
+            binary_labels=bin_test_all, **_mask_kw,
         )
 
         bin_train_sampler = get_weighted_sampler(np.array(bin_train_pair), 2) if args.balance_strategy == "weighted_sampler" else None
@@ -2755,21 +2816,37 @@ def main():
             n = (df["class_name"] == cls).sum()
             logger.info(f"  {cls}: {n}")
 
+    # --binary_ashi_te: drop sutemi_waza entirely, force multiclass over {ashi_waza, te_waza}
+    if getattr(args, "binary_ashi_te", False):
+        if args.mode in ("ovr", "ovo"):
+            logger.warning("--binary_ashi_te forces mode=multiclass; --mode=%s will be ignored", args.mode)
+        if getattr(args, "all", False):
+            logger.warning("--binary_ashi_te is not compatible with --all; --all will be ignored")
+            args.all = False
+        args.mode = "multiclass"
+        active_classes = ASHI_TE_CLASSES
+        df = df[df["class_name"].isin(ASHI_TE_CLASSES)].reset_index(drop=True)
+        df["label"] = df["class_name"].map(ASHI_TE_CLASS_TO_IDX)
+        logger.info("binary_ashi_te mode: sutemi_waza dropped, ashi_waza (label 0) vs te_waza (label 1)")
+        for cls in ASHI_TE_CLASSES:
+            n = (df["class_name"] == cls).sum()
+            logger.info(f"  {cls}: {n}")
+
     # Split
     good_df = df[df["status"] == "ok"].reset_index(drop=True)
     if len(good_df) == 0:
         logger.error("No readable videos found")
         sys.exit(1)
 
-    # --balance_dataset: undersample para a classe minoritaria ANTES do split
-    # (apos o remap binary_tachi, entao o binario balanceia sutemi vs tachi e os
-    # demais modos balanceiam as 3 classes originais)
+    # --balance_dataset: undersample to the minority class size BEFORE the split
+    # (after the binary_tachi remap, so binary mode balances sutemi vs tachi and the
+    # other modes balance the 3 original classes)
     if getattr(args, "balance_dataset", False):
-        logger.info("balance_dataset: undersampling todas as classes para o tamanho da menor")
+        logger.info("balance_dataset: undersampling every class to the minority class size")
         good_df = balance_dataset_df(good_df, args.seed, args.output_dir)
 
     if getattr(args, "group_split", False):
-        logger.info("group_split: split por FONTE (StratifiedGroupKFold) — leakage-free")
+        logger.info("group_split: split by SOURCE (StratifiedGroupKFold) — leakage-free")
         train_df, val_df, test_df, dist_df = make_group_splits(
             good_df, args.train_split, args.val_split, args.test_split, args.seed,
             args.output_dir, classes=active_classes, fold=args.group_fold,
@@ -2781,21 +2858,21 @@ def main():
         )
     logger.info(f"Split: train={len(train_df)} val={len(val_df)} test={len(test_df)}")
 
-    # --- Fluxo optico / two-stream (item 4) ---
+    # --- Optical flow / two-stream (item 4) ---
     if getattr(args, "precompute_flow", False):
         all_split_df = pd.concat([train_df, val_df, test_df], ignore_index=True)
         precompute_flow_dataset(all_split_df, args)
-        logger.info("precompute_flow concluido; saindo sem treinar.")
+        logger.info("precompute_flow finished; exiting without training.")
         return
     modality = getattr(args, "input_modality", "rgb")
     if modality != "rgb":
         if getattr(args, "all", False) or getattr(args, "compare_spatial", False) or args.mode != "multiclass":
-            logger.error("--input_modality %s so suporta mode=multiclass (inclui --binary_tachi); "
-                         "--all / --compare_spatial / ovr / ovo nao sao suportados.", modality)
+            logger.error("--input_modality %s only supports mode=multiclass (includes --binary_tachi); "
+                         "--all / --compare_spatial / ovr / ovo are not supported.", modality)
             sys.exit(1)
         if args.spatial_mode != "full_frame":
-            logger.info("--input_modality %s + spatial_mode=%s: o fluxo optico usa a MESMA "
-                        "box/crop YOLO do ramo RGB (cache com tag dedicada).", modality, args.spatial_mode)
+            logger.info("--input_modality %s + spatial_mode=%s: optical flow uses the SAME "
+                        "YOLO box/crop as the RGB branch (cache with a dedicated tag).", modality, args.spatial_mode)
 
     # --all: run multiclass, ovr, ovo and multiclass+yolo sequentially
     if getattr(args, "all", False):
