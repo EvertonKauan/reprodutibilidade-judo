@@ -33,15 +33,26 @@ analysis, including why optical flow *does* help R(2+1)D-18 but not MC3-18.
 > shipped in this repository. Because of that, **training or evaluating from scratch with
 > only the public data in this repo will not reproduce `0.787 ± 0.027`**, and that's
 > expected, not a bug: it's a smaller, differently-balanced sample. What *is* the exact
-> production model is already sitting in [`results/models/`](results/models/) — **the 10
-> checkpoints released here are the very same weights used to compute the paper's
-> official number**, trained on the full private+public dataset. Running them (via
+> production model is already sitting in [`results/models/mc3_18_rgb/`](results/models/mc3_18_rgb/)
+> — **the 10 checkpoints released there are the very same weights used to compute the
+> paper's official number**, trained on the full private+public dataset. Running them (via
 > `scripts/05_classify_clip_ensemble.py`) on new clips, or on the public subset shipped
 > here, uses the real model — only the *training data* is restricted, not the model
 > itself. Evaluating the released ensemble on the public subset gives Macro F1 = 0.769
 > (see [`results/public_subset_evaluation_summary.json`](results/public_subset_evaluation_summary.json))
 > — a real, honest number for a smaller/different sample, not a discrepancy to be
 > alarmed about.
+>
+> **All four rows of the table are auditable, not just the top one.** Every configuration
+> has its full per-fold report released — `config.json`, `classification_report.json`,
+> confusion matrices, and `predictions_test.csv` — under `results/models/<config>/foldN/`,
+> so you can verify exactly how each number was computed even without retraining.
+> Full checkpoints (`.pt`) are released for the two **RGB-only** configurations
+> (`mc3_18_rgb/`, `r2plus1d_18_rgb/`); the two **two-stream** configurations
+> (`mc3_18_two_stream/`, `r2plus1d_18_two_stream/`) ship reports only, to keep this
+> repository's size reasonable — they were not selected for deployment (see RQ2/RQ3 in
+> the paper), so redistributing their weights was a lower priority than the four-way
+> report/audit trail.
 
 > **Why source-wise cross-validation?** Many clips come from the same match/source
 > (near-duplicates). With a per-video split, clips from the same match can land in both
@@ -64,14 +75,19 @@ reprodutibilidade-judo/
 ├── scripts/
 │   ├── 01_download_videos.py          # downloads the source videos (yt-dlp)
 │   ├── 02_generate_clips.py           # cuts the 565 clips from the manifest (ffmpeg)
-│   ├── 03_train_cv_mc3.sh/.ps1        # cross-validation training (10 folds)
+│   ├── 03_train_cv_mc3.sh/.ps1        # cross-validation training (10 folds, MC3-18 RGB-only)
 │   ├── 04_cv_summary.py               # CV mean ± std (the number reported in the paper)
-│   └── 05_classify_clip_ensemble.py   # classifies an already-cut clip with the 10-fold ensemble
+│   ├── 05_classify_clip_ensemble.py   # classifies an already-cut clip with the 10-fold ensemble
+│   └── 06_benchmark_inference.py      # reproduces the paper's GPU inference-cost numbers (RQ3)
 ├── results/
-│   ├── models/foldN/                  # per-fold checkpoint (.pt) + metrics/config/curves
+│   ├── models/
+│   │   ├── mc3_18_rgb/foldN/           # RELEASED config — checkpoint (.pt) + full report
+│   │   ├── r2plus1d_18_rgb/foldN/      # checkpoint (.pt) + full report
+│   │   ├── mc3_18_two_stream/foldN/    # report only (no .pt) — see note above
+│   │   └── r2plus1d_18_two_stream/foldN/  # report only (no .pt)
 │   ├── public_subset_evaluation.csv        # per-clip result on the public subset (565 clips)
 │   ├── public_subset_evaluation_summary.json  # aggregate metrics for that subset
-│   └── cv_summary.md                  # CV summary table
+│   └── cv_summary.md                  # CV summary table (mc3_18_rgb)
 ├── dist/                              # standalone throw-detection extractor — see dist/README.md
 ├── docs/                              # methodology and lab notes
 ├── requirements.txt / environment.yml
@@ -136,11 +152,13 @@ python scripts/05_classify_clip_ensemble.py path/to/clip.mp4
 python scripts/05_classify_clip_ensemble.py clip1.mp4 clip2.mp4 --json out.json
 ```
 
-This loads the 10 checkpoints in `results/models/fold{0..9}/multiclass/best_model.pt`,
-samples 64 frames per clip using the exact same code path as training, runs each of the
-10 models, and averages the softmax probabilities (bagging-style ensemble) for the final
-prediction and confidence. The clip must already be cut to the technique window (this
-script does not detect or trim it for you).
+This loads the 10 checkpoints in
+`results/models/mc3_18_rgb/fold{0..9}/multiclass/best_model.pt` (default; pass
+`--models-dir results/models/r2plus1d_18_rgb` for the other released config), samples 64
+frames per clip using the exact same code path as training, runs each of the 10 models,
+and averages the softmax probabilities (bagging-style ensemble) for the final prediction
+and confidence. The clip must already be cut to the technique window (this script does
+not detect or trim it for you).
 
 ## 4) Training (cross-validation, 10 folds)
 
@@ -153,14 +171,37 @@ powershell -ExecutionPolicy Bypass -File scripts\03_train_cv_mc3.ps1 data\analys
 ```
 
 Each fold reproduces exactly the hyperparameters in
-`results/models/foldN/config.json` (mc3_18, binary sutemi vs tachi, 64 frames, 112px,
-RGB-only, 40 fine-tuning epochs, seed 42, source-wise split, 10 folds).
+`results/models/mc3_18_rgb/foldN/config.json` (mc3_18, binary sutemi vs tachi, 64 frames,
+112px, RGB-only, 40 fine-tuning epochs, seed 42, source-wise split, 10 folds). The other
+three configurations in the main table (R(2+1)D-18 RGB, MC3-18 two-stream, R(2+1)D-18
+two-stream) use the same command with `--model`/`--input_modality` changed accordingly —
+see each config's `config.json` under `results/models/<config>/fold0/` for the exact
+flags used.
 
 ## 5) Final CV number
 
 ```bash
 python scripts/04_cv_summary.py      # prints and saves results/cv_summary.md
 ```
+
+## 6) Reproducing the inference-cost benchmark (RQ3)
+
+```bash
+python scripts/06_benchmark_inference.py --config-dir results/models/mc3_18_rgb
+python scripts/06_benchmark_inference.py --config-dir results/models/mc3_18_rgb \
+    --config-dir results/models/r2plus1d_18_rgb
+```
+
+Reproduces the paper's Section V ("Inference Cost") numbers: loads all 10 checkpoints of
+a configuration, times one full ensemble forward pass (all 10 models, batch size 1,
+`num_frames`/`image_size` read from `config.json`) over several runs after a warm-up,
+with `torch.cuda.synchronize()` around each timed section. **Requires a CUDA GPU** to
+match the paper's numbers (measured on an NVIDIA L4); this benchmarks GPU compute only —
+it does not include optical flow extraction (CPU-only, see `docs/methodology.md`) or
+video I/O. Out of the box this only runs for the two configs whose checkpoints are
+released (`mc3_18_rgb`, `r2plus1d_18_rgb`); the two-stream configs need their own
+checkpoints placed under `results/models/<config>/foldN/multiclass/best_model.pt` first
+(not redistributed here — see the note under "Main result" above).
 
 ## Throw-detection extractor (`dist/`)
 
@@ -178,14 +219,23 @@ clips: you can use it **or** cut clips manually. Details in [`dist/README.md`](d
   with this package.
 - Built and **tested on Linux** (ELF); not verified on Windows/macOS.
 
-## Trained models
+## Trained models and results
 
-[`results/models/fold{0..9}/multiclass/best_model.pt`](results/models/) — the **10
-checkpoints of the official cross-validation ensemble** (MC3-18, RGB-only), the exact
-weights used to compute the paper's `0.787 ± 0.027`. Each fold's full report (config,
-classification report, confusion matrix, training curves) is alongside it in
-`results/models/foldN/`. Use `scripts/05_classify_clip_ensemble.py` to run them on new
-clips.
+| Configuration | Checkpoints (`.pt`) | Full per-fold report |
+|---|---|---|
+| `results/models/mc3_18_rgb/` | ✅ 10 folds | ✅ |
+| `results/models/r2plus1d_18_rgb/` | ✅ 10 folds | ✅ |
+| `results/models/mc3_18_two_stream/` | — | ✅ |
+| `results/models/r2plus1d_18_two_stream/` | — | ✅ |
+
+`mc3_18_rgb/fold{0..9}/multiclass/best_model.pt` are the exact weights used to compute
+the paper's official `0.787 ± 0.027`. Every configuration's `foldN/` directory contains
+`config.json` (exact training flags), `multiclass/classification_report.json`,
+confusion-matrix images, training curves, and `predictions_test.csv` — enough to verify
+every number in the paper's main table without retraining, even for the two configs
+whose weights aren't redistributed here. Use `scripts/05_classify_clip_ensemble.py` to
+run the released checkpoints on new clips, and `scripts/06_benchmark_inference.py` to
+reproduce the inference-latency numbers.
 
 ## Additional documentation
 

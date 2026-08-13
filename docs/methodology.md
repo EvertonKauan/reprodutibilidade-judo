@@ -60,9 +60,28 @@ Binary classification **sutemi_waza vs tachi_waza** (where `tachi_waza` = `ashi_
 | MC3-18 | RGB + flow | 0.781 ± 0.038 |
 
 Exact commands in `scripts/03_train_cv_mc3.*`; per-fold hyperparameters in
-`results/models/foldN/config.json`.
+`results/models/<config>/foldN/config.json` (`mc3_18_rgb`, `r2plus1d_18_rgb`,
+`mc3_18_two_stream`, `r2plus1d_18_two_stream` — all four rows of the table above have a
+full per-fold report released, even though only the two RGB-only configs ship
+checkpoints; see the main README).
 
 > **Note on the released public evaluation.** Running the released ensemble on the
 > 565-clip public subset (the only data redistributed here) gives Macro F1 = 0.769, not
 > the 0.787 ± 0.027 above — see the main README for why the two numbers differ and are
 > both expected/correct.
+
+## Inference cost (RQ3)
+
+GPU inference latency (Section V of the paper) is measured with
+`scripts/06_benchmark_inference.py`: the 10-fold ensemble's forward pass is timed on an
+NVIDIA L4 GPU, batch size 1, over 10 runs after a 5-run warm-up, with
+`torch.cuda.synchronize()` around each timed section to account for CUDA's asynchronous
+execution. This measures GPU compute only (model forward pass), not optical-flow
+extraction (CPU-only, see above) or video I/O.
+
+| Configuration | Mean latency (10-fold ensemble, NVIDIA L4) |
+|---|---|
+| **MC3-18 RGB** | **226.06 ms** |
+| MC3-18 two-stream | 452.59 ms |
+| R(2+1)D-18 RGB | 409.40 ms |
+| R(2+1)D-18 two-stream | 815.86 ms |

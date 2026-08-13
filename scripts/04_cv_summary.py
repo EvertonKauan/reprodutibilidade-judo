@@ -4,7 +4,7 @@
 Summarizes the cross-validation (source group-split) of MC3-18 RGB-only, 10 folds.
 
 Reads classification_report.json from each fold in
-results/models/foldN/multiclass/ and prints + saves the mean +- std
+results/models/mc3_18_rgb/foldN/multiclass/ and prints + saves the mean +- std
 of the macro F1 (the honest number reported in the paper).
 
 Usage:
@@ -17,7 +17,7 @@ import statistics
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-CV_DIR = os.path.join(ROOT, "results", "models")
+CV_DIR = os.path.join(ROOT, "results", "models", "mc3_18_rgb")
 
 
 def main() -> int:

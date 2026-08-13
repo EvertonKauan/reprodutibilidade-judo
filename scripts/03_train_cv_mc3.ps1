@@ -2,7 +2,7 @@
 #  MC3-18 (RGB-only) training with source-wise CROSS-VALIDATION
 #  StratifiedGroupKFold (10 folds, leakage-free). Runs on GPU (CUDA).
 #
-#  Reproduces exactly the hyperparameters of results/models/foldN/config.json.
+#  Reproduces exactly the hyperparameters of results/models/mc3_18_rgb/foldN/config.json.
 #  10 folds follows Kohavi (1995): best bias/variance trade-off for
 #  cross-validation-based accuracy estimation.
 #
@@ -35,7 +35,7 @@ foreach ($Fold in 0..9) {
     Write-Host "==================== FOLD $Fold ===================="
     python "$Root\src\main.py" `
         --data_dir "$Data" `
-        --output_dir "$Root\results\models\fold$Fold" `
+        --output_dir "$Root\results\models\mc3_18_rgb\fold$Fold" `
         --model mc3_18 --binary_tachi `
         --num_frames 64 --image_size 112 --batch_size 4 `
         --epochs_head 5 --epochs_finetune 40 `

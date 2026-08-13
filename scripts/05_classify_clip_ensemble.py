@@ -4,7 +4,7 @@
 Classifies an already-cut judo clip (~4s, sutemi_waza vs tachi_waza) using the
 10-fold cross-validation ensemble of MC3-18 (RGB-only).
 
-Loads the 10 trained checkpoints (results/models/foldN/multiclass/best_model.pt),
+Loads the 10 trained checkpoints (results/models/mc3_18_rgb/foldN/multiclass/best_model.pt),
 runs a forward pass of each on the clip, and averages the softmax probabilities
 across the 10 folds (bagging-style ensemble) to produce the final prediction and
 confidence.
@@ -85,8 +85,10 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("clips", nargs="+", help="Path(s) to already-cut clip(s) (e.g., .mp4).")
-    ap.add_argument("--models-dir", default=os.path.join(ROOT, "results", "models"),
-                     help="Directory containing fold0..fold9/multiclass/best_model.pt (default: results/models).")
+    ap.add_argument("--models-dir", default=os.path.join(ROOT, "results", "models", "mc3_18_rgb"),
+                     help="Directory containing fold0..fold9/multiclass/best_model.pt "
+                          "(default: results/models/mc3_18_rgb, the released production config). "
+                          "Other configs with released weights: results/models/r2plus1d_18_rgb.")
     ap.add_argument("--num-folds", type=int, default=10, help="Number of ensemble folds (default: 10).")
     ap.add_argument("--num-frames", type=int, default=64, help="Frames sampled per clip (must match training: 64).")
     ap.add_argument("--image-size", type=int, default=112, help="Frame resize (must match training: 112).")
