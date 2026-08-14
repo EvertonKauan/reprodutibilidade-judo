@@ -1,5 +1,5 @@
 {
-  "data_dir": "/home/vpcuser/everton-mc-tcn/experimento_dataset_pro",
+  "data_dir": "/home/vpcuser/mc-tcn/experimento_dataset_pro",
   "output_dir": "res_v6_r2plus1d_rgb_fold2",
   "model": "r2plus1d_18",
   "mode": "multiclass",

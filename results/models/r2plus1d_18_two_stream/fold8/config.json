@@ -1,5 +1,5 @@
 {
-  "data_dir": "/home/vpcuser/everton-mc-tcn/experimento_dataset_pro",
+  "data_dir": "/home/vpcuser/mc-tcn/experimento_dataset_pro",
   "output_dir": "res_v6_r2plus1d_twostream_fold8",
   "model": "r2plus1d_18",
   "mode": "multiclass",
@@ -56,7 +56,7 @@
   "group_split": true,
   "group_fold": 8,
   "input_modality": "two_stream",
-  "flow_cache_dir": "/home/vpcuser/everton-mc-tcn/flow_cache_pro_nf64_sz112",
+  "flow_cache_dir": "/home/vpcuser/mc-tcn/flow_cache_pro_nf64_sz112",
   "flow_bound": 20.0,
   "precompute_flow": false,
   "recursive_scan": false

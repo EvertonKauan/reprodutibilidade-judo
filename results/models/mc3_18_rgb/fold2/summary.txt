@@ -1,7 +1,7 @@
 ============================================================
 JUDO CLASSIFICATION SUMMARY
 ============================================================
-Data dir:  /home/vpcuser/everton-mc-tcn/experimento_dataset_pro
+Data dir:  /home/vpcuser/mc-tcn/experimento_dataset_pro
 Output:    res_v6_mc3_rgb_fold2
 Model:     mc3_18
 Mode:      multiclass
