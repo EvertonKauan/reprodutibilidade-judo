@@ -8,18 +8,12 @@ abstract: >-
   (10 folds).
 type: software
 authors:
-  - given-names: "Everton Kauan S."
-    family-names: Oliveira
-    email: everton.kauan.silva.oliveira@ccc.ufcg.edu.br
-    affiliation: "Federal University of Campina Grande"
-  - given-names: "Everton Leandro G."
-    family-names: Alves
-    email: everton@computacao.ufcg.edu.br
-    affiliation: "Federal University of Campina Grande"
-  - given-names: "João Arthur B."
-    family-names: Monteiro
-    email: joao.arthur@computacao.ufcg.edu.br
-    affiliation: "Federal University of Campina Grande"
+  - name: "Author 1"
+    affiliation: "Anonymous University"
+  - name: "Author 2"
+    affiliation: "Anonymous University"
+  - name: "Author 3"
+    affiliation: "Anonymous University"
 version: "2.0.0"
 date-released: "2026-08-12"
 license: MIT
