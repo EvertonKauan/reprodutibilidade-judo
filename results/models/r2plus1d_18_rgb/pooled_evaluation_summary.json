@@ -1,0 +1,41 @@
+{
+  "description": "Pooled evaluation (test-set predictions concatenated across the 10 CV folds). Each clip in the dataset is evaluated exactly once, since --group_split produces disjoint test folds.",
+  "total_evaluated": 2070,
+  "accuracy": 0.5869565217391305,
+  "macro_precision": 0.6617996924985838,
+  "macro_recall": 0.652736131934033,
+  "macro_f1": 0.5863231034286904,
+  "weighted_f1": 0.5816467559022321,
+  "per_class": {
+    "sutemi_waza": {
+      "precision": 0.4579505300353357,
+      "recall": 0.8804347826086957,
+      "f1": 0.602510460251046,
+      "support": 736
+    },
+    "tachi_waza": {
+      "precision": 0.8656488549618321,
+      "recall": 0.4250374812593703,
+      "f1": 0.5701357466063348,
+      "support": 1334
+    }
+  },
+  "confusion_matrix": {
+    "labels": [
+      "sutemi_waza",
+      "tachi_waza"
+    ],
+    "matrix": [
+      [
+        648,
+        88
+      ],
+      [
+        767,
+        567
+      ]
+    ]
+  },
+  "correct": 1215,
+  "errors": 855
+}

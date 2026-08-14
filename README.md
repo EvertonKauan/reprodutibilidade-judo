@@ -78,13 +78,16 @@ reprodutibilidade-judo/
 │   ├── 03_train_cv_mc3.sh/.ps1        # cross-validation training (10 folds, MC3-18 RGB-only)
 │   ├── 04_cv_summary.py               # CV mean ± std (the number reported in the paper)
 │   ├── 05_classify_clip_ensemble.py   # classifies an already-cut clip with the 10-fold ensemble
-│   └── 06_benchmark_inference.py      # reproduces the paper's GPU inference-cost numbers (RQ3)
+│   ├── 06_benchmark_inference.py      # reproduces the paper's GPU inference-cost numbers (RQ3)
+│   └── 07_pooled_evaluation_summary.py # reproduces the paper's class-wise P/R/F1 tables
 ├── results/
 │   ├── models/
-│   │   ├── mc3_18_rgb/foldN/           # RELEASED config — checkpoint (.pt) + full report
-│   │   ├── r2plus1d_18_rgb/foldN/      # checkpoint (.pt) + full report
-│   │   ├── mc3_18_two_stream/foldN/    # report only (no .pt) — see note above
-│   │   └── r2plus1d_18_two_stream/foldN/  # report only (no .pt)
+│   │   ├── mc3_18_rgb/                 # RELEASED config — 10× checkpoint (.pt) + full report
+│   │   │   ├── foldN/                   #   per-fold config/report/predictions
+│   │   │   └── pooled_evaluation_summary.json  #   paper's exact class-wise table (2,070 clips)
+│   │   ├── r2plus1d_18_rgb/            # same layout, checkpoints included
+│   │   ├── mc3_18_two_stream/          # same layout, report only (no .pt) — see note above
+│   │   └── r2plus1d_18_two_stream/     # same layout, report only (no .pt)
 │   ├── public_subset_evaluation.csv        # per-clip result on the public subset (565 clips)
 │   ├── public_subset_evaluation_summary.json  # aggregate metrics for that subset
 │   └── cv_summary.md                  # CV summary table (mc3_18_rgb)
@@ -219,6 +222,21 @@ clips: you can use it **or** cut clips manually. Details in [`dist/README.md`](d
   with this package.
 - Built and **tested on Linux** (ELF); not verified on Windows/macOS.
 
+## 7) Reproducing the paper's class-wise tables (pooled evaluation)
+
+```bash
+python scripts/07_pooled_evaluation_summary.py --config-dir results/models/mc3_18_rgb
+```
+
+`scripts/04_cv_summary.py` reports the fold-mean ± std (the primary metric for comparing
+configurations). The paper's class-wise Precision/Recall/F1 tables instead **pool** the
+test predictions of all 10 folds (disjoint under `--group_split`, so every clip is
+evaluated exactly once) into a single confusion matrix over the full dataset — that
+pooled table is what `07_pooled_evaluation_summary.py` reproduces, saved as
+`pooled_evaluation_summary.json` inside each config's folder. Works for all four
+configurations (each has `predictions_test.csv` per fold, even the two without released
+checkpoints).
+
 ## Trained models and results
 
 | Configuration | Checkpoints (`.pt`) | Full per-fold report |
@@ -233,9 +251,10 @@ the paper's official `0.787 ± 0.027`. Every configuration's `foldN/` directory 
 `config.json` (exact training flags), `multiclass/classification_report.json`,
 confusion-matrix images, training curves, and `predictions_test.csv` — enough to verify
 every number in the paper's main table without retraining, even for the two configs
-whose weights aren't redistributed here. Use `scripts/05_classify_clip_ensemble.py` to
-run the released checkpoints on new clips, and `scripts/06_benchmark_inference.py` to
-reproduce the inference-latency numbers.
+whose weights aren't redistributed here. Each config's `pooled_evaluation_summary.json`
+is the exact class-wise table reported in the paper. Use
+`scripts/05_classify_clip_ensemble.py` to run the released checkpoints on new clips, and
+`scripts/06_benchmark_inference.py` to reproduce the inference-latency numbers.
 
 ## Additional documentation
 
